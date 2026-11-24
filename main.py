@@ -1,10 +1,16 @@
 """Write the entry line to /output/entry.txt.
 
 One line, at most 160 characters: the excuse an AI agent gives its
-human for missing a deadline. Pure stdlib, no network.
+human for missing a deadline. Pure stdlib, no network, no side
+effects beyond the single output file.
+
+After writing, the file is read back and checked byte-for-byte
+against the expected line, so a truncated or corrupted write can
+never slip through silently.
 """
 
 import os
+import stat
 import tempfile
 
 MAX_CHARS = 160
@@ -43,6 +49,20 @@ def main():
             pass
         raise
     os.chmod(out_path, 0o644)
+
+    # Read-back verification: the written file must be byte-identical
+    # to the expected line, with no trailing newline, and world-readable.
+    expected = line.encode("utf-8")
+    with open(out_path, "rb") as f:
+        actual = f.read()
+    if actual != expected:
+        raise ValueError("entry.txt does not match the expected line")
+    if actual.endswith(b"\n"):
+        raise ValueError("entry.txt must not end with a newline")
+    mode = stat.S_IMODE(os.stat(out_path).st_mode)
+    if mode != 0o644:
+        raise ValueError(f"entry.txt mode must be 0o644, got {oct(mode)}")
+    print(f"Wrote {len(line)} characters to {out_path}")
 
 
 if __name__ == "__main__":
